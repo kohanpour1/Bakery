@@ -1,0 +1,30 @@
+name: Bakery Time CI
+on:
+  push:
+    branches: [main, master]
+  paths:
+    - '**.js'
+    - '**.json'
+    - 'Dockerfile'
+    - 'docker-compose.yml'
+    - '.github/workflows/build.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  syntax-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - name: Install dependencies
+        run: npm install
+      - name: JavaScript syntax checks
+        run: |
+          node --check server.js
+          node --check public/app.js
+      - name: Build Docker image
+        run: docker build -t bakery-time-online:${{ github.sha }} .
