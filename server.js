@@ -9,7 +9,16 @@ db.exec(`CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY, username TEXT 
 CREATE TABLE IF NOT EXISTS tasks(id INTEGER PRIMARY KEY, assigned_to INTEGER NOT NULL REFERENCES users(id), title TEXT NOT NULL, description TEXT DEFAULT '', due_date TEXT, status TEXT NOT NULL DEFAULT 'pending', created_by INTEGER NOT NULL, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, completed_at TEXT);
 CREATE TABLE IF NOT EXISTS task_events(id INTEGER PRIMARY KEY, task_id INTEGER REFERENCES tasks(id), actor_id INTEGER REFERENCES users(id), event_type TEXT NOT NULL, details TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY, actor_id INTEGER REFERENCES users(id), action TEXT NOT NULL, target_id INTEGER, details TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP);`);
-const adminName=process.env.ADMIN_USERNAME||'kohanpour';const initPass=process.env.ADMIN_INITIAL_PASSWORD||(isProduction?'':'1');if(!db.prepare('SELECT id FROM users WHERE username=?').get(adminName)){db.prepare('INSERT INTO users(username,display_name,password_hash,role,must_change_password) VALUES(?,?,?,?,?)').run(adminName,'مدیر سامانه',bcrypt.hashSync(initPass,12),'admin',process.env.FORCE_ADMIN_PASSWORD_CHANGE==='false'?0:1);}
+const adminName=process.env.ADMIN_USERNAME||'kohanpour';const initPass=process.env.ADMIN_INITIAL_PASSWORD||(isProduction?'':'Bakery@1405');
+const adminRow=db.prepare('SELECT id FROM users WHERE username=?').get(adminName);
+if(!adminRow){
+  db.prepare('INSERT INTO users(username,display_name,password_hash,role,must_change_password) VALUES(?,?,?,?,?)')
+    .run(adminName,'مدیر سامانه',bcrypt.hashSync(initPass,12),'admin',process.env.FORCE_ADMIN_PASSWORD_CHANGE==='false'?0:1);
+} else if(process.env.ADMIN_RESET_PASSWORD==='true' && initPass){
+  db.prepare('UPDATE users SET password_hash=?,must_change_password=? WHERE username=?')
+    .run(bcrypt.hashSync(initPass,12), process.env.FORCE_ADMIN_PASSWORD_CHANGE==='false'?0:1, adminName);
+  console.log('Admin password reset from ADMIN_INITIAL_PASSWORD');
+}
 app.set('trust proxy',1);app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'","'unsafe-inline'"],styleSrc:["'self'","'unsafe-inline'"],frameSrc:["'self'"],connectSrc:["'self'"]}}}));app.use(express.json({limit:'100kb'}));app.use(rateLimit({windowMs:10*60*1000,max:300,standardHeaders:true,legacyHeaders:false}));
 app.use((req,res,next)=>{if(['POST','PATCH','PUT','DELETE'].includes(req.method)&&req.headers.origin){const host=req.headers.host;try{if(new URL(req.headers.origin).host!==host)return res.status(403).json({error:'درخواست مبدأ غیرمجاز'});}catch{return res.status(403).json({error:'مبدأ نامعتبر'});}}next();});
 app.use(session({store:new SQLiteStore({db:'sessions.sqlite',dir:dbDir}),secret:process.env.SESSION_SECRET||'change-this-secret-before-deploy',resave:false,saveUninitialized:false,cookie:{httpOnly:true,sameSite:'lax',secure:process.env.NODE_ENV==='production',maxAge:8*60*60*1000}}));
